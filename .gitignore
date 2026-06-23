@@ -1,0 +1,8 @@
+/target/
+/dist/
+/config.toml
+/*-session.json
+/*.har
+*.log
+.DS_Store
+

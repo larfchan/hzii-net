@@ -1,0 +1,23 @@
+[Unit]
+Description=HZII campus network login and keepalive
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hzii-net
+Group=hzii-net
+RuntimeDirectory=hzii-net
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/local/bin/hzii-net --config /etc/hzii-net/config.toml watch
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/hzii-net
+
+[Install]
+WantedBy=multi-user.target

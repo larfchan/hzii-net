@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: hzii-net
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - arm-unknown-linux-musleabi
+          - arm-unknown-linux-musleabihf
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select stable Rust
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+      - name: Install cross
+        run: cargo install cross --locked
+      - name: Build
+        run: cross build --locked --release --target "${{ matrix.target }}"
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="${BINARY_NAME}-${VERSION}-${TARGET}"
+          mkdir -p "dist/${PACKAGE}"
+          cp "target/${TARGET}/release/${BINARY_NAME}" "dist/${PACKAGE}/"
+          cp README.md LICENSE config.example.toml "dist/${PACKAGE}/"
+          tar -C dist -cJf "dist/${PACKAGE}.tar.xz" "${PACKAGE}"
+          rm -rf "dist/${PACKAGE}"
+          cd dist
+          sha256sum "${PACKAGE}.tar.xz" > "${PACKAGE}.tar.xz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows ${{ matrix.target }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select stable Rust and add target
+        shell: pwsh
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+      - name: Build
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+      - name: Package
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $package = "$env:BINARY_NAME-$version-$env:TARGET"
+          $stage = Join-Path dist $package
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/$env:TARGET/release/$env:BINARY_NAME.exe" $stage
+          Copy-Item README.md, LICENSE, config.example.toml $stage
+          $archive = Join-Path dist "$package.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -CompressionLevel Optimal
+          Remove-Item -LiteralPath $stage -Recurse -Force
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          "$hash  $package.zip" | Out-File -Encoding ascii "$archive.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select stable Rust and add target
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+      - name: Build
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE="${BINARY_NAME}-${VERSION}-${TARGET}"
+          mkdir -p "dist/${PACKAGE}"
+          cp "target/${TARGET}/release/${BINARY_NAME}" "dist/${PACKAGE}/"
+          cp README.md LICENSE config.example.toml "dist/${PACKAGE}/"
+          tar -C dist -cJf "dist/${PACKAGE}.tar.xz" "${PACKAGE}"
+          rm -rf "dist/${PACKAGE}"
+          cd dist
+          shasum -a 256 "${PACKAGE}.tar.xz" > "${PACKAGE}.tar.xz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [linux, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List release files
+        run: find dist -maxdepth 1 -type f -printf '%f\n' | sort
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME"
+          fi

@@ -1,0 +1,23 @@
+# 校园网 Portal 地址。当前协议只支持 HTTP。
+server = "http://10.10.0.10:8008"
+
+# 也可以不写在文件里，改用环境变量 HZII_NET_USERNAME / HZII_NET_PASSWORD。
+username = "YOUR_STUDENT_ID"
+password = "YOUR_PASSWORD"
+
+# 浏览器在没有 uplcyid 参数时实际提交字符串 "null"。
+uplcyid = "null"
+language = 0
+
+timeout_seconds = 30
+check_captcha = true
+retry_seconds = 15
+keepalive_margin_seconds = 10
+max_keepalive_failures = 3
+
+# 建议放在内存文件系统，避免频繁写路由器闪存。
+# OpenWrt/ImmortalWrt: "/tmp/hzii-net-session.json"
+# systemd Linux:       "/run/hzii-net/session.json"
+# Windows 启动任务:     'C:\ProgramData\hzii-net\session.json'
+# 普通前台运行可留空，默认使用当前用户的系统临时目录。
+# state_file = "/tmp/hzii-net-session.json"
