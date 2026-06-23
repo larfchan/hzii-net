@@ -122,26 +122,7 @@ impl PortalClient {
 
     fn captcha_code(&self) -> Result<Option<String>, PortalError> {
         let body = self.post_form("/user_auth_verify.cgi", &[("submit", "submit")])?;
-        let value: Value = serde_json::from_str(&body).map_err(|error| {
-            PortalError::InvalidResponse(format!("验证码接口不是有效 JSON：{error}"))
-        })?;
-        let verify = value
-            .get("verify")
-            .and_then(|item| {
-                item.as_i64()
-                    .or_else(|| item.as_str().and_then(|text| text.parse().ok()))
-            })
-            .ok_or_else(|| PortalError::InvalidResponse("验证码响应缺少 verify".to_owned()))?;
-        if verify == 1 {
-            let code = value
-                .get("code")
-                .and_then(Value::as_str)
-                .filter(|text| !text.is_empty())
-                .ok_or_else(|| PortalError::InvalidResponse("验证码响应缺少 code".to_owned()))?;
-            Ok(Some(code.to_owned()))
-        } else {
-            Ok(None)
-        }
+        parse_captcha_response(&body)
     }
 
     fn post_form(&self, path: &str, form: &[(&str, &str)]) -> Result<String, PortalError> {
@@ -174,6 +155,30 @@ impl PortalClient {
             Err(ureq::Error::Transport(error)) => Err(PortalError::Transport(error.to_string())),
         }
     }
+}
+
+fn parse_captcha_response(body: &str) -> Result<Option<String>, PortalError> {
+    let value: Value = serde_json::from_str(body).map_err(|error| {
+        PortalError::InvalidResponse(format!("验证码接口不是有效 JSON：{error}"))
+    })?;
+    let verify = value.get("verify").and_then(|item| {
+        item.as_i64()
+            .or_else(|| item.as_str().and_then(|text| text.parse().ok()))
+            .or_else(|| item.as_bool().map(i64::from))
+    });
+
+    // The browser only asks for a code when `data.verify == 1`. Responses such
+    // as {"result":"fail"} therefore mean "continue without a captcha".
+    if verify != Some(1) {
+        return Ok(None);
+    }
+
+    let code = value
+        .get("code")
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| PortalError::InvalidResponse("验证码响应缺少 code".to_owned()))?;
+    Ok(Some(code.to_owned()))
 }
 
 fn parse_login_response(body: &str, expected_username: &str) -> Result<LoginInfo, PortalError> {
@@ -301,5 +306,14 @@ mod tests {
             parse_keepalive_response("0#offline"),
             Err(PortalError::Offline(_))
         ));
+    }
+
+    #[test]
+    fn accepts_captcha_result_without_verify() {
+        assert_eq!(parse_captcha_response(r#"{"result":"fail"}"#).unwrap(), None);
+        assert_eq!(
+            parse_captcha_response(r#"{"verify":1,"code":"a1b2"}"#).unwrap(),
+            Some("a1b2".to_owned())
+        );
     }
 }

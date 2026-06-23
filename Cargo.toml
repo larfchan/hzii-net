@@ -1,11 +1,11 @@
 [package]
 name = "hzii-net"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.86"
-authors = ["hzii-net contributors"]
+authors = ["LarfChan"]
 description = "Headless campus portal login and keepalive client for BUAA Hangzhou Innovation Institute"
-repository = "https://github.com/your-name/hzii-net"
+repository = "https://github.com/larfchan/hzii-net"
 license = "MIT"
 keywords = ["campus-network", "portal", "openwrt", "keepalive"]
 categories = ["command-line-utilities", "network-programming"]
