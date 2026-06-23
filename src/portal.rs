@@ -310,7 +310,10 @@ mod tests {
 
     #[test]
     fn accepts_captcha_result_without_verify() {
-        assert_eq!(parse_captcha_response(r#"{"result":"fail"}"#).unwrap(), None);
+        assert_eq!(
+            parse_captcha_response(r#"{"result":"fail"}"#).unwrap(),
+            None
+        );
         assert_eq!(
             parse_captcha_response(r#"{"verify":1,"code":"a1b2"}"#).unwrap(),
             Some("a1b2".to_owned())
