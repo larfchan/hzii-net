@@ -1,8 +1,8 @@
 /target/
 /dist/
+/releases/
 /config.toml
 /*-session.json
 /*.har
 *.log
 .DS_Store
-
