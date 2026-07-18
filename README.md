@@ -78,6 +78,48 @@ Windows 和 macOS 的包名同样包含目标三元组。AArch64 是 64 位 ARM�
 
 系统服务只负责开机启动和进程崩溃后重启。登录、451 秒左右的周期保活和掉线重连都由 `watch` 命令内部完成，不需要 cron 反复执行登录。
 
+## OpenWrt / ImmortalWrt 路由器文件放哪里
+
+推荐使用交互式安装脚本，先把文件上传到路由器的临时目录：
+
+```text
+/tmp/hzii-net-install/hzii-net                  # 对应架构的可执行文件
+/tmp/hzii-net-install/config.toml               # 填好学号和密码的配置文件
+/tmp/hzii-net-install/install-immortalwrt.sh     # 安装脚本
+```
+
+然后 SSH 进入路由器执行：
+
+```sh
+sh /tmp/hzii-net-install/install-immortalwrt.sh
+```
+
+脚本会自动把文件安装到正式位置，并设置权限和开机自启：
+
+```text
+/usr/bin/hzii-net                 # 程序本体，权限 755
+/etc/hzii-net.toml                # 配置文件，权限 600
+/etc/init.d/hzii-net              # OpenWrt/ImmortalWrt 启动脚本，权限 755
+/tmp/hzii-net-session.json        # 运行时会话状态，放在内存文件系统，重启后自动消失
+```
+
+如果你不使用交互式脚本，也可以手动放置：
+
+```sh
+cp hzii-net /usr/bin/hzii-net
+cp config.toml /etc/hzii-net.toml
+cp packaging/openwrt/hzii-net.init /etc/init.d/hzii-net
+
+chmod 755 /usr/bin/hzii-net /etc/init.d/hzii-net
+chmod 600 /etc/hzii-net.toml
+
+/etc/init.d/hzii-net enable
+/etc/init.d/hzii-net start
+logread -e hzii-net
+```
+
+`/tmp/hzii-net-install` 只是上传中转目录，重启会消失；真正长期保存的是 `/usr/bin/hzii-net` 和 `/etc/hzii-net.toml`。会话状态建议写到 `/tmp/hzii-net-session.json`，这样保活时不会频繁写路由器闪存。
+
 ## 本地构建与 GitHub Actions
 
 参见 [构建和发布指南](docs/build-and-release.md)。在 64 位 Windows 上可以生成 ARM/AArch64 程序；“构建机器架构”和“目标程序架构”不是一回事。Linux ARM 的链接环境用 WSL + `cross` 会更方便，但发布版本可以完全交给 GitHub Actions。
